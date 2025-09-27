@@ -55,6 +55,8 @@ The dataset spans multiple markets including:
 
 This rich dataset enables comprehensive analysis of sales trends, customer behavior, regional performance, product profitability, and seasonal patterns across Walmart's global operations.
 
+## Analyzing basic questions in SQL
+
 ## Overview Analysis
 <img src = "Img/Overview.png">
 
@@ -221,6 +223,196 @@ The 2011-2014 product performance data positions Walmart exceptionally well for 
 The presence of multiple top-performing products within each category indicates successful brand partnerships and product selection strategies. This approach of offering choice within popular categories, rather than betting on single products, provides resilience and appeals to diverse customer preferences.
 
 Most importantly, the consistent growth across all three major categories demonstrates that Walmart's product strategy isn't just about riding single trends, but about building a sustainable, diversified product portfolio that can adapt to changing market conditions while continuing to serve evolving customer needs.
+
+## SQL Analysis: Key Business Questions
+
+This section presents essential SQL queries that answer critical business questions about Walmart's performance. These queries provide the foundation for data-driven decision making and strategic planning.
+
+### 1. Financial Performance Analysis
+
+**Question: What are the total sales and profit by category for each year?**
+```sql
+-- Calculate Total Sales and Profit by Category for Each Year
+SELECT Category, Year, 
+       SUM(Sales) AS 'Total Sales', 
+       SUM(Profit) AS 'Total Profit',
+       ROUND((SUM(Profit) / SUM(Sales)) * 100, 2) AS 'Profit Margin %'
+FROM dbo.Global_Superstore
+GROUP BY Category, Year
+ORDER BY Year, 'Total Sales' DESC;
+```
+*This query helps identify which product categories are driving revenue and profitability year over year.*
+
+### 2. Customer Value Analysis
+
+**Question: Who are our top 5 customers by sales volume?**
+```sql
+-- Get the Top 5 Customers by Sales
+SELECT TOP 5 
+       Customer_Name, 
+       Customer_ID, 
+       SUM(Sales) AS "Total Sales",
+       COUNT(DISTINCT Order_ID) AS "Number of Orders",
+       ROUND(SUM(Sales) / COUNT(DISTINCT Order_ID), 2) AS "Average Order Value"
+FROM dbo.Global_Superstore
+GROUP BY Customer_Name, Customer_ID
+ORDER BY "Total Sales" DESC;
+```
+*Identifies high-value customers for targeted marketing and retention strategies.*
+
+### 3. Seasonal Trends Analysis
+
+**Question: What are the monthly sales trends across different years?**
+```sql
+-- Calculate Monthly Sales Trend for Each Year
+SELECT YEAR(Order_Date) AS "Year", 
+       MONTH(Order_Date) AS "Month", 
+       DATENAME(MONTH, Order_Date) AS "Month Name",
+       SUM(Sales) AS Monthly_Sales,
+       COUNT(DISTINCT Order_ID) AS Monthly_Orders
+FROM dbo.Global_Superstore
+GROUP BY YEAR(Order_Date), MONTH(Order_Date), DATENAME(MONTH, Order_Date)
+ORDER BY YEAR(Order_Date), MONTH(Order_Date);
+```
+*Reveals seasonal patterns for inventory planning and marketing campaign timing.*
+
+### 4. Market Performance Analysis
+
+**Question: Which region and segment combination is most profitable?**
+```sql
+-- Identify the Most Profitable Region and Segment
+SELECT TOP 10
+       Market2 AS Region, 
+       Segment, 
+       SUM(Profit) AS Total_Profit,
+       SUM(Sales) AS Total_Sales,
+       COUNT(DISTINCT Customer_ID) AS Customer_Count
+FROM dbo.Global_Superstore
+GROUP BY Market2, Segment
+ORDER BY Total_Profit DESC;
+```
+*Helps prioritize market segments and geographic regions for expansion.*
+
+### 5. Growth Analysis
+
+**Question: What is the year-over-year growth in sales for each category?**
+```sql
+-- Calculate Year-over-Year Growth in Sales for Each Category
+WITH sales_per_year AS (
+    SELECT Category, Year, SUM(Sales) AS Total_Sales
+    FROM dbo.Global_Superstore
+    GROUP BY Category, Year 
+)
+SELECT a.Category, 
+       a.Year AS Current_Year, 
+       a.Total_Sales AS Current_Year_Sales, 
+       b.Year AS Previous_Year, 
+       b.Total_Sales AS Previous_Year_Sales, 
+       ROUND(((a.Total_Sales - b.Total_Sales) * 1.0 / b.Total_Sales) * 100, 2) AS YoY_Growth_Percentage
+FROM sales_per_year a
+JOIN sales_per_year b ON a.Category = b.Category AND a.Year = b.Year + 1
+ORDER BY a.Category, a.Year;
+```
+*Tracks growth momentum and identifies accelerating or declining categories.*
+
+### 6. Profitability Issues Analysis
+
+**Question: Which product subcategories are losing money?**
+```sql
+-- Find the Product Subcategories with Negative Profit
+SELECT Sub_Category,
+       SUM(Sales) AS Total_Sales,
+       SUM(Profit) AS Total_Profit,
+       ROUND((SUM(Profit) / SUM(Sales)) * 100, 2) AS Profit_Margin_Percentage,
+       COUNT(DISTINCT Order_ID) AS Number_of_Orders
+FROM dbo.Global_Superstore
+GROUP BY Sub_Category
+HAVING SUM(Profit) < 0
+ORDER BY Total_Profit;
+```
+*Identifies problematic product lines requiring strategic intervention.*
+
+### 7. Additional Strategic Queries
+
+**Question: What is the average discount by category and its impact on profit?**
+```sql
+-- Analyze Discount Impact on Profitability
+SELECT Category,
+       ROUND(AVG(Discount) * 100, 2) AS Avg_Discount_Percentage,
+       SUM(Sales) AS Total_Sales,
+       SUM(Profit) AS Total_Profit,
+       ROUND((SUM(Profit) / SUM(Sales)) * 100, 2) AS Profit_Margin_Percentage
+FROM dbo.Global_Superstore
+GROUP BY Category
+ORDER BY Avg_Discount_Percentage DESC;
+```
+
+**Question: Which shipping modes are most popular and profitable?**
+```sql
+-- Shipping Mode Analysis
+SELECT Ship_Mode,
+       COUNT(*) AS Number_of_Shipments,
+       ROUND(AVG(Shipping_Cost), 2) AS Avg_Shipping_Cost,
+       SUM(Sales) AS Total_Sales,
+       SUM(Profit) AS Total_Profit
+FROM dbo.Global_Superstore
+GROUP BY Ship_Mode
+ORDER BY Number_of_Shipments DESC;
+```
+
+**Question: What is the customer retention rate by segment?**
+```sql
+-- Customer Retention Analysis by Segment
+WITH customer_years AS (
+    SELECT DISTINCT Customer_ID, Segment, Year
+    FROM dbo.Global_Superstore
+),
+customer_spans AS (
+    SELECT Customer_ID, Segment, 
+           MIN(Year) as First_Year,
+           MAX(Year) as Last_Year,
+           COUNT(DISTINCT Year) as Years_Active
+    FROM customer_years
+    GROUP BY Customer_ID, Segment
+)
+SELECT Segment,
+       COUNT(*) AS Total_Customers,
+       AVG(CAST(Years_Active AS FLOAT)) AS Avg_Years_Active,
+       COUNT(CASE WHEN Years_Active > 1 THEN 1 END) AS Retained_Customers,
+       ROUND((COUNT(CASE WHEN Years_Active > 1 THEN 1 END) * 100.0 / COUNT(*)), 2) AS Retention_Rate_Percentage
+FROM customer_spans
+GROUP BY Segment
+ORDER BY Retention_Rate_Percentage DESC;
+```
+
+### 8. Performance Benchmarking
+
+**Question: How do sales perform by day of the week?**
+```sql
+-- Sales Performance by Day of Week
+SELECT DATENAME(WEEKDAY, Order_Date) AS Day_of_Week,
+       DATEPART(WEEKDAY, Order_Date) AS Day_Number,
+       COUNT(*) AS Number_of_Orders,
+       SUM(Sales) AS Total_Sales,
+       ROUND(AVG(Sales), 2) AS Average_Order_Value
+FROM dbo.Global_Superstore
+GROUP BY DATENAME(WEEKDAY, Order_Date), DATEPART(WEEKDAY, Order_Date)
+ORDER BY Day_Number;
+```
+
+### Key Insights from SQL Analysis
+
+These queries reveal several critical insights:
+
+1. **Category Performance**: Technology consistently shows the highest growth rates
+2. **Customer Concentration**: Top customers contribute significantly to total revenue
+3. **Seasonal Patterns**: Q4 consistently outperforms other quarters
+4. **Regional Opportunities**: Certain market-segment combinations drive disproportionate profits
+5. **Operational Challenges**: Some subcategories require immediate attention due to negative profitability
+6. **Discount Strategy**: High discounts don't always correlate with better profitability
+7. **Customer Loyalty**: Segment-based retention rates vary significantly
+
+These SQL queries form the foundation for data-driven decision making and provide actionable insights for strategic planning and operational optimization.
 
 ## Conclusions
 
